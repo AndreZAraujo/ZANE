@@ -21,25 +21,27 @@
 
 Python **3.10+**, apenas biblioteca padrão. É necessária uma chave válida da [YouTube Data API v3](https://developers.google.com/youtube/data/getting-started). **Nunca publique ou envie a chave.**
 
-### Windows PowerShell
+### Windows PowerShell — sem configurar variáveis de ambiente
 
-Coloque o arquivo `radar_sem_nicho_v3.py` no diretório do projeto.
+1. Coloque **`radar_sem_nicho_v3.py`** e **`youtube_api_key.txt`** **na mesma pasta**. O ZIP de distribuição já contém os dois.
+2. Abra `youtube_api_key.txt` no Bloco de Notas. **Substitua `COLE_SUA_CHAVE_AQUI` por sua chave real**, em uma única linha, sem aspas, e salve (`Ctrl+S`). Não altere a extensão para `.txt.txt`.
+3. Execute o script:
 
 ```powershell
 cd "C:\Users\andre\Desktop\radar_longform_v2_codigo_e_testes"
 
-# Verifique sem revelar a chave:
-if ($env:YOUTUBE_API_KEY) { "Chave configurada" } else { "Chave ausente" }
-
-# Caso necessario, apenas na sessao atual:
-$env:YOUTUBE_API_KEY = "SUA_CHAVE"
-
-# Conferir as consultas sem usar API Key e sem gastar cota:
+# Conferir a grade de consultas sem gastar cota:
 python .\radar_sem_nicho_v3.py --plan-only
 
-# Pesquisa ZERO temas (ultimos 21 dias, 5 regioes, ate 50 por regiao)
-python .\radar_sem_nicho_v3.py
+# Pesquisa sem restrição de temas (últimos 21 dias, 5 regiões, até 50 canais por região)
+python .\radar_sem_nicho_v3.py --history-source ".\resultado_longform_v2\historico_snapshots.csv"
 ```
+
+**A chave é lida automaticamente do arquivo TXT ao lado do script**, não importa de qual pasta você abriu o PowerShell. O arquivo **não será enviado ao GitHub**: `youtube_api_key.txt` está no `.gitignore`. Não compartilhe o TXT depois de preenchê-lo e não envie um ZIP contendo a sua chave.
+
+O repositório público contém apenas `youtube_api_key.example.txt` (sem segredo); se você baixar os arquivos diretamente do GitHub, copie ou renomeie esse exemplo para `youtube_api_key.txt` antes de preencher.
+
+A variável de ambiente `YOUTUBE_API_KEY` continua funcionando como alternativa. Se os dois existirem, **o TXT preenchido tem prioridade**. Não é necessário reinstalar Python nem recriar a credencial no Google Cloud.
 
 Para repetir **a janela original**:
 
