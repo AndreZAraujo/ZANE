@@ -1,6 +1,8 @@
-# Dark Channels Radar v3 — SEM FILTRO POR TEMA
+# Dark Channels Radar v3.1 — SEM FILTRO POR TEMA (correção da cota)
 
 **Objetivo:** descobrir canais com primeira publicação pública conhecida recente e mensurar **long-form** de qualquer assunto nos Estados Unidos, Canadá, Reino Unido, Austrália e Alemanha. Canais mistos continuam elegíveis. O nicho será **resultado da análise**, nunca uma condição da pesquisa.
+
+> **Atualização v3.1 (17/11/2026):** corrigimos o tratamento de erro HTTP 429 quando a mensagem do Google indica `Search Queries per day`. Em vez de continuar 80 tentativas inúteis, o programa encerra imediatamente, grava `status_coleta.json` e `auditoria_busca_parcial_quota.csv`, e **preserva rankings antigos**. Nenhuma mudança na seleção de nichos.
 
 > A busca é uma **amostra da API pública**, não um censo do YouTube nem uma confirmação de RPM. `regionCode` significa disponibilidade regional do vídeo; **não identifica residência do canal nem a localização dos espectadores**. O país declarado pode ser diferente do país da busca. A API não permite identificar automaticamente todos os Shorts em canais de terceiros.
 
@@ -23,7 +25,7 @@ Python **3.10+**, apenas biblioteca padrão. É necessária uma chave válida da
 
 ### Windows PowerShell — sem configurar variáveis de ambiente
 
-1. Coloque **`radar_sem_nicho_v3.py`** e **`youtube_api_key.txt`** **na mesma pasta**. O ZIP de distribuição já contém os dois.
+1. Coloque **`radar_sem_nicho_v3.py`** e **`youtube_api_key.txt`** **na mesma pasta**. O pacote original incluía um TXT-modelo; o ZIP de correção v3.1 inclui apenas o exemplo sem segredo. Preserve seu `youtube_api_key.txt` já preenchido.
 2. Abra `youtube_api_key.txt` no Bloco de Notas. **Substitua `COLE_SUA_CHAVE_AQUI` por sua chave real**, em uma única linha, sem aspas, e salve (`Ctrl+S`). Não altere a extensão para `.txt.txt`.
 3. Execute o script:
 
@@ -84,6 +86,7 @@ Saída padrão: `resultado_radar_sem_nicho_v3/` (separada da v2).
 - `resumo_paises.csv`: cobertura e posições não preenchidas; **não são líderes absolutos** dos países.
 - `historico_snapshots.csv` e `crescimento_monitorado.csv`: histórico real dos canais rastreados e evolução calculável após 2 ou mais coletas.
 - `metodologia.json`: parâmetros da execução e limitações.
+- `status_coleta.json`: status `COMPLETA` ou `INTERROMPIDA_QUOTA`. Se interrompida, confira também `auditoria_busca_parcial_quota.csv`. Os rankings anteriores não são sobrescritos em falhas de cota.
 
 **Qualificação:** por padrão, ao menos um vídeo maior que 3 minutos e 1.000 visualizações acumuladas nesses vídeos dentro da janela. A pontuação não depende de Shorts; canais mistos podem entrar. A categoria emergente é descritiva, e as médias de `<=3min` não devem ser chamadas de RPM de Shorts.
 
@@ -99,7 +102,7 @@ python .\radar_sem_nicho_v3.py --min-long-uploads 2 --min-long-views 5000
 
 ## Cotas e custos
 
-Segundo a documentação oficial [Quota Calculator](https://developers.google.com/youtube/data/determine_quota_cost), a cota padrão de `search.list` é **100 chamadas diárias**, em bucket separado, e há até **10.000 unidades para os demais endpoints** por dia, com alterações sujeitas à conta/projeto. O programa limita por padrão a 80 buscas e 6.000 chamadas a outros endpoints e **não evita consumo anterior no mesmo dia**. As cotas diárias reiniciam à meia-noite do Pacífico. Se você executou a v2 hoje e já gastou 80 buscas, **não rode v3 antes da renovação**, para não esgotar a cota nem produzir uma coleta parcial. Não há necessidade de adicionar novas bibliotecas ou pagar vidIQ.
+Segundo a documentação oficial [Quota Calculator](https://developers.google.com/youtube/data/determine_quota_cost), a cota padrão de `search.list` é **100 chamadas diárias**, em bucket separado, e há até **10.000 unidades para os demais endpoints** por dia, com alterações sujeitas à conta/projeto. O programa limita por padrão a 80 buscas e 6.000 chamadas a outros endpoints e **não evita consumo anterior no mesmo dia**. As cotas diárias reiniciam à meia-noite do Pacífico. Se você executou a v2 hoje e já gastou 80 buscas, **não rode v3 antes da renovação**. A v3.1 verifica o limite diário e **interrompe a execução sem substituir relatórios anteriores** ao receber a mensagem de cota esgotada. Erros de sobrecarga temporária continuam sujeitos a retentativas limitadas. Não há necessidade de adicionar novas bibliotecas ou pagar vidIQ.
 
 ## Leitura correta dos resultados
 
@@ -115,4 +118,4 @@ Segundo a documentação oficial [Quota Calculator](https://developers.google.co
 python -m unittest -v test_radar_sem_nicho_v3.py
 ```
 
-Testes sem internet incluem validação de chamadas sem `q`, canais mistos e antigos, exclusão de vídeos públicos anteriores à janela, revisão manual de Shorts e continuidade dos snapshots.
+Testes sem internet incluem validação de chamadas sem `q`, canais mistos e antigos, exclusão de vídeos públicos anteriores à janela, revisão manual de Shorts, continuidade dos snapshots, reconhecimento de 429 de limite diário e proteção contra sobrescrita de relatórios.
