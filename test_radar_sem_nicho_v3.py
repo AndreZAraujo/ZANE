@@ -96,6 +96,45 @@ class TestRadar(unittest.TestCase):
             self.assertEqual(cats[0]['videos_long'],'2')
             self.assertTrue(all('videoCategoryId' not in x for x in api.search_params))
 
+    def test_key_file_loads_without_powershell_env(self):
+        with tempfile.TemporaryDirectory() as d:
+            secret = Path(d)/'youtube_api_key.txt'
+            secret.write_text('  CHAVE_SIMULADA_123  \n', encoding='utf-8')
+            with patch.object(radar, '__file__', str(Path(d)/'radar_sem_nicho_v3.py')):
+                with patch.dict('os.environ', {'YOUTUBE_API_KEY': ''}):
+                    self.assertEqual(radar.load_api_key(), 'CHAVE_SIMULADA_123')
+
+    def test_key_file_wins_over_environment_variable(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d)/'youtube_api_key.txt').write_text('CHAVE_DO_ARQUIVO', encoding='utf-8')
+            with patch.object(radar, '__file__', str(Path(d)/'radar_sem_nicho_v3.py')):
+                with patch.dict('os.environ', {'YOUTUBE_API_KEY': 'CHAVE_DO_AMBIENTE'}):
+                    self.assertEqual(radar.load_api_key(), 'CHAVE_DO_ARQUIVO')
+
+    def test_placeholder_allows_environment_fallback(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d)/'youtube_api_key.txt').write_text('COLE_SUA_CHAVE_AQUI\n', encoding='utf-8')
+            with patch.object(radar, '__file__', str(Path(d)/'radar_sem_nicho_v3.py')):
+                with patch.dict('os.environ', {'YOUTUBE_API_KEY': 'CHAVE_BACKUP'}):
+                    self.assertEqual(radar.load_api_key(), 'CHAVE_BACKUP')
+
+    def test_missing_key_gives_actionable_message(self):
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(radar, '__file__', str(Path(d)/'radar_sem_nicho_v3.py')):
+                with patch.dict('os.environ', {'YOUTUBE_API_KEY': ''}):
+                    with self.assertRaises(SystemExit) as context:
+                        radar.load_api_key()
+            self.assertIn('youtube_api_key.txt', str(context.exception))
+            self.assertNotIn('CHAVE_SIMULADA_123', str(context.exception))
+
+    def test_key_file_rejects_multiple_lines(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d)/'youtube_api_key.txt').write_text('CHAVE1\nCHAVE2\n', encoding='utf-8')
+            with patch.object(radar, '__file__', str(Path(d)/'radar_sem_nicho_v3.py')):
+                with patch.dict('os.environ', {'YOUTUBE_API_KEY': ''}):
+                    with self.assertRaises(SystemExit):
+                        radar.load_api_key()
+
     def test_plan_only_requires_no_key_and_spends_no_quota(self):
         with patch.dict('os.environ',{'YOUTUBE_API_KEY':''}):
             self.assertIsNone(radar.main(['--plan-only','--countries','US','--shards','1']))
