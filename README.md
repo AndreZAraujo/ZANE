@@ -10,7 +10,7 @@ python .\radar_sem_nicho_v3.py --plan-only
 python .\radar_sem_nicho_v3.py
 ```
 
-Requer Python 3.10+ e a variável de ambiente `YOUTUBE_API_KEY` configurada. **Não publique a chave no GitHub.** O modo `--plan-only` não consulta a API.
+Requer Python 3.10+ e a chave da YouTube Data API v3. Coloque a sua chave em **`youtube_api_key.txt`**, ao lado do script (uma única linha), sem precisar configurar variáveis do PowerShell. Copie [o arquivo-modelo](./youtube_api_key.example.txt) e renomeie-o para `youtube_api_key.txt`. **Não publique a chave no GitHub**. O modo `--plan-only` não consulta a API.
 
 ## Versão 3 — principal
 
