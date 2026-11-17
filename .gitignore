@@ -14,3 +14,5 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+resultado_longform_v2/
+resultado_radar_sem_nicho_v3/
