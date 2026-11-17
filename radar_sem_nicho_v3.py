@@ -186,7 +186,21 @@ def iso_date(value: str) -> datetime:
 
 
 class QuotaStop(RuntimeError):
-    pass
+    """Limite diario da API ou limite local de consultas."""
+
+
+def search_quota_exhausted(message: str) -> bool:
+    """Detecta inclusive HTTP 429 com reason=rateLimitExceeded e limite *per day*.
+
+    O Google pode devolver reason=rateLimitExceeded para limites diarios granulares.
+    Nao confundir isso com sobrecarga temporaria por segundo.
+    """
+    msg = str(message).lower()
+    return (
+        "dailylimitexceeded" in msg
+        or "quotaexceeded" in msg
+        or ("quota exceeded" in msg and "search queries per day" in msg)
+    )
 
 
 class YouTube:
@@ -213,7 +227,14 @@ class YouTube:
                 with request.urlopen(url, timeout=35) as rsp:
                     return json.load(rsp)
             except error.HTTPError as exc:
-                body = exc.read().decode("utf-8", "replace")[:500]
+                body = exc.read().decode("utf-8", "replace")[:1500]
+                # Nao fazer novas tentativas quando a cota DIARIA de search.list
+                # acabou. Isso evita 75 erros repetidos e protege os CSVs validos.
+                if endpoint == "search" and search_quota_exhausted(body):
+                    raise QuotaStop(
+                        "COTA_DIARIA_SEARCH_ESGOTADA: limite Search Queries per day "
+                        "(HTTP " + str(exc.code) + "). Aguarde renovacao da cota."
+                    ) from exc
                 if exc.code in (429, 500, 502, 503) and retry < 3:
                     time.sleep(2 ** retry)
                     continue
@@ -283,13 +304,13 @@ def discover(api: YouTube, codes: list[str], start: str, end_exclusive: str,
                 token = rsp.get("nextPageToken")
                 if not token:
                     break
-            except RuntimeError as exc:
+            except (QuotaStop, RuntimeError) as exc:
                 audit.append({"pais_busca":plan["code"],"fatia":plan["shard"],
                               "inicio_utc":plan["start"],"fim_utc":plan["end"],
                               "ordenacao":plan["order"],"duracao_filtro":plan["duration"],
                               "pagina":page+1,"q_enviado":"NAO","categoria_filtrada":"NAO",
-                              "videos_retornados":0,"canais_unicos_acumulados":len(found[plan["code"]]),"erro":str(exc)})
-                if "quotaExceeded" in str(exc) or "dailyLimitExceeded" in str(exc):
+                              "videos_retornados":0,"canais_unicos_acumulados":len(found[plan["code"]]),"erro":str(exc)[:500]})
+                if isinstance(exc, QuotaStop) or search_quota_exhausted(str(exc)):
                     stop = True
                 break
     # Evita truncar antes da verificacao por data de primeiro upload; caso
@@ -612,11 +633,27 @@ def main(argv=None, api=None):
     watch_ids={r.get("channel_id") for r in old_history if r.get("channel_id")}
     found, searches=discover(client,codes,start,end,args.candidate_limit_per_country,seed,
                              args.shards,args.pages_per_search)
-    quota_errors=[r for r in searches if "quotaExceeded" in r.get("erro","") or "dailyLimitExceeded" in r.get("erro","")]
-    if quota_errors and not any(found[c] for c in codes):
-        raise SystemExit("Quota search.list esgotada antes da descoberta. Nenhum ranking foi sobrescrito; tente apos a renovacao diaria da cota.")
+    quota_errors=[r for r in searches if search_quota_exhausted(r.get("erro", ""))
+                  or "COTA_DIARIA_SEARCH_ESGOTADA" in r.get("erro", "")]
     if quota_errors:
-        print("ATENCAO: quota search.list esgotada; esta coleta tem cobertura PARCIAL.",file=sys.stderr)
+        # Nunca sobrescrever os relatórios existentes com dados parciais.
+        audit_fields=["pais_busca","fatia","inicio_utc","fim_utc","ordenacao","duracao_filtro",
+                      "pagina","q_enviado","categoria_filtrada","videos_retornados",
+                      "canais_unicos_acumulados","erro"]
+        write_csv(out/"auditoria_busca_parcial_quota.csv",searches,audit_fields)
+        (out/"status_coleta.json").write_text(json.dumps({
+            "status":"INTERROMPIDA_QUOTA",
+            "motivo":"Limite diario Search Queries per day atingido",
+            "consultas_tentadas":len(searches),
+            "consultas_bem_sucedidas":sum(not r.get("erro") for r in searches),
+            "dados_anteriores_preservados":True,
+            "aviso":"Execute novamente apos a renovacao da cota diaria",
+        },ensure_ascii=False,indent=2),encoding="utf-8")
+        raise SystemExit(
+            "Cota diaria search.list esgotada. Interrompido imediatamente; "
+            "rankings existentes PRESERVADOS. Veja status_coleta.json e "
+            "auditoria_busca_parcial_quota.csv. Execute apos a renovacao da cota."
+        )
     write_csv(out/"auditoria_busca.csv",searches,
               ["pais_busca","fatia","inicio_utc","fim_utc","ordenacao","duracao_filtro",
                "pagina","q_enviado","categoria_filtrada","videos_retornados",
@@ -790,6 +827,13 @@ def main(argv=None, api=None):
     for row in summary:
         print(f"  {row['codigo']}: {row['posicoes_preenchidas']}/{args.target} canais qualificados; "
               f"{row['posicoes_pendentes']} pendentes")
+    (out/"status_coleta.json").write_text(json.dumps({
+        "status":"COMPLETA",
+        "chamadas_search":client.search_calls,
+        "chamadas_outras":client.other_calls,
+        "consultas_bem_sucedidas":sum(not r.get("erro") for r in searches),
+        "avisos":"Amostra nao exaustiva; sem restricoes de tema",
+    },ensure_ascii=False,indent=2),encoding="utf-8")
     print(f"Search: {client.search_calls} chamadas | outras: {client.other_calls} chamadas")
     return out
 
