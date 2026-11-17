@@ -1,0 +1,16 @@
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+*.key
+credentials.json
+secrets.json
+
+# Generated results
+resultado_youtube_sem_vidiq/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
