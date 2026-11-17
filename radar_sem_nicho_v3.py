@@ -7,8 +7,13 @@ Descoberta amostral, sem vidIQ. Canais mistos nao sao descartados: analisa
 videos >3min independentemente das visualizacoes em possiveis Shorts <=3min.
 
 Exemplo Windows PowerShell:
-  $env:YOUTUBE_API_KEY = 'SUA_CHAVE'
-  python radar_sem_nicho_v3.py --seed-csv resultado_longform_v2/canais_elegiveis_analisados.csv
+  # Coloque sua API Key (so a chave, em uma linha) no arquivo youtube_api_key.txt
+  # situado na mesma pasta deste script. Nao precisa configurar PowerShell.
+  python radar_sem_nicho_v3.py
+
+Como alternativa, a variavel de ambiente YOUTUBE_API_KEY ainda funciona.
+O arquivo txt local tem prioridade quando contem uma chave configurada.
+NUNCA publique o arquivo de chave no GitHub.
 
 Por padrao a janela sao os ultimos 21 dias corridos (inclusive), em UTC.
 SEM palavras-chave, categorias ou topicos na descoberta (search.list sem q).
@@ -75,6 +80,58 @@ CHANNEL_COLUMNS = [
 ]
 SNAPSHOT_COLUMNS = ["coleta_utc", "channel_id", "pais_busca", "canal", "inscritos",
                     "views_canal", "videos_canal", "videos_long_na_janela", "views_long_na_janela"]
+
+# A credencial fica em arquivo LOCAL, ignorado pelo Git, sem alterar o Python.
+# Resolvida relativamente ao script: funciona mesmo abrindo PowerShell em outro local.
+API_KEY_FILENAME = "youtube_api_key.txt"
+API_KEY_PLACEHOLDERS = {
+    "COLE_SUA_CHAVE_AQUI", "COLE_SUA_API_KEY_AQUI", "SUA_CHAVE_AQUI",
+    "COLE_SUA_API_KEY_DO_YOUTUBE_AQUI", "SUA_CHAVE",
+}
+
+
+def load_api_key() -> str:
+    """Ler arquivo TXT local; se nao estiver preenchido, usar variavel de ambiente.
+
+    Nunca imprime a chave. Evita depender do diretorio de trabalho (cwd).
+    """
+    path = Path(__file__).resolve().parent / API_KEY_FILENAME
+    if path.is_file():
+        try:
+            raw = path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError) as exc:
+            raise SystemExit(
+                f"Nao consegui ler {API_KEY_FILENAME}: {exc.__class__.__name__}. "
+                "Confira se o arquivo e um TXT UTF-8 valido."
+            ) from None
+        rows = [line.strip() for line in raw.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
+        if len(rows) > 1:
+            raise SystemExit(
+                f"{API_KEY_FILENAME} deve conter apenas uma linha com a chave, "
+                "sem texto adicional."
+            )
+        if rows:
+            key = rows[0]
+            if key.startswith("YOUTUBE_API_KEY="):
+                key = key.partition("=")[2].strip()
+            key = key.strip("\"'").strip()
+            if key and key.upper() not in API_KEY_PLACEHOLDERS:
+                if any(char.isspace() for char in key):
+                    raise SystemExit(
+                        f"A chave em {API_KEY_FILENAME} possui espacos ou quebras "
+                        "de linha; cole somente a chave."
+                    )
+                return key
+
+    env_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if env_key and env_key.upper() not in API_KEY_PLACEHOLDERS:
+        return env_key
+    raise SystemExit(
+        "API Key nao encontrada. Abra youtube_api_key.txt na mesma pasta do "
+        "radar_sem_nicho_v3.py, substitua COLE_SUA_CHAVE_AQUI pela chave da "
+        "YouTube Data API v3 e salve o arquivo. Nao envie ou publique sua chave."
+    )
 
 
 def duration_seconds(value: str | None) -> int | None:
@@ -535,9 +592,11 @@ def main(argv=None, api=None):
             print(f"  {country}: {len(scoped)} consultas - {args.shards} intervalos, duracoes medium/long, ordenacoes date/viewCount")
         print("Cada consulta EXCLUI: q, topicId, videoCategoryId. Nenhuma chamada a API realizada.")
         return None
-    client=api or YouTube(os.getenv("YOUTUBE_API_KEY", ""), args.max_search_requests, args.max_other_requests)
+    client = api if api is not None else YouTube(
+        load_api_key(), args.max_search_requests, args.max_other_requests
+    )
     if not getattr(client, "key", None):
-        raise SystemExit("Configure YOUTUBE_API_KEY no ambiente; nunca publique a chave")
+        raise SystemExit("A API Key nao foi carregada corretamente.")
     out=Path(args.output_dir);out.mkdir(parents=True,exist_ok=True)
     seed=read_csv(Path(args.seed_csv)) if args.seed_csv else []
     manual_rows=read_csv(out/"revisao_short_manual.csv")
