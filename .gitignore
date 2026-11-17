@@ -16,3 +16,8 @@ __pycache__/
 venv/
 resultado_longform_v2/
 resultado_radar_sem_nicho_v3/
+
+# YouTube API Key stored locally (never commit)
+youtube_api_key.txt
+youtube_api_key*.txt
+!youtube_api_key.example.txt
