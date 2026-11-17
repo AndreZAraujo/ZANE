@@ -1,4 +1,7 @@
 import csv
+import io
+import json
+from urllib.error import HTTPError
 from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
@@ -219,6 +222,42 @@ class TestRadar(unittest.TestCase):
             with history.open(encoding='utf-8-sig') as f:
                 after=list(csv.DictReader(f))
             self.assertGreater(len(after),len(before))
+
+
+    def test_daily_429_is_quota_and_not_retried(self):
+        payload=json.dumps({"error":{"code":429,"message":"Quota exceeded for quota metric 'Search Queries' and limit 'Search Queries per day'","errors":[{"reason":"rateLimitExceeded"}]}}).encode("utf-8")
+        def fail(*args,**kwargs):
+            raise HTTPError('https://example.invalid',429,'limit',{},io.BytesIO(payload))
+        with patch.object(radar.request,'urlopen',side_effect=fail) as opened:
+            with patch.object(radar.time,'sleep') as paused:
+                with self.assertRaises(radar.QuotaStop):
+                    radar.YouTube('TEST_KEY',80,6000).get('search',part='snippet',type='video')
+        self.assertEqual(opened.call_count,1)
+        paused.assert_not_called()
+
+    def test_quota_abort_preserves_previous_good_results(self):
+        class Limited(MockAPI):
+            def get(self,endpoint,**kw):
+                if endpoint=='search':
+                    self.search_calls+=1
+                    raise radar.QuotaStop('COTA_DIARIA_SEARCH_ESGOTADA: Search Queries per day')
+                return super().get(endpoint,**kw)
+        with tempfile.TemporaryDirectory() as d:
+            out=Path(d)
+            report=out/'top50_longform_por_pais.csv'
+            report.write_text('DADOS_ANTERIORES_NAO_MODIFICAR\n',encoding='utf-8')
+            with self.assertRaises(SystemExit) as context:
+                radar.main(['--countries','US','--start','2026-10-27','--end','2026-11-17',
+                            '--output-dir',d,'--shards','1'],api=Limited())
+            self.assertIn('PRESERVADOS',str(context.exception))
+            self.assertEqual(report.read_text(encoding='utf-8'),'DADOS_ANTERIORES_NAO_MODIFICAR\n')
+            self.assertEqual(json.loads((out/'status_coleta.json').read_text(encoding='utf-8'))['status'],
+                             'INTERROMPIDA_QUOTA')
+            with (out/'auditoria_busca_parcial_quota.csv').open(encoding='utf-8-sig') as f:
+                records=list(csv.DictReader(f))
+            self.assertEqual(len(records),1)
+            self.assertFalse((out/'resumo_paises.csv').exists())
+
 
 
 if __name__=='__main__':
