@@ -1,6 +1,6 @@
 # Dark Channels Radar — pesquisa de canais novos no YouTube
 
-**Versão atual: Radar v3, SEM FILTRO POR TEMA.** O assunto do canal é uma conclusão da análise, e não uma condição de pesquisa.
+**Versão atual: Radar v3.1, SEM FILTRO POR TEMA.** O assunto do canal é uma conclusão da análise, e não uma condição de pesquisa.
 
 ## Início rápido (Windows PowerShell)
 
@@ -11,6 +11,10 @@ python .\radar_sem_nicho_v3.py
 ```
 
 Requer Python 3.10+ e a chave da YouTube Data API v3. Coloque a sua chave em **`youtube_api_key.txt`**, ao lado do script (uma única linha), sem precisar configurar variáveis do PowerShell. Copie [o arquivo-modelo](./youtube_api_key.example.txt) e renomeie-o para `youtube_api_key.txt`. **Não publique a chave no GitHub**. O modo `--plan-only` não consulta a API.
+
+## Atualização v3.1 — correção de cota diária
+
+A partir da v3.1, respostas HTTP 429 referentes à métrica diária `Search Queries per day` interrompem imediatamente a coleta. O programa escreve `status_coleta.json` e `auditoria_busca_parcial_quota.csv` sem substituir rankings anteriores. Não execute v2 e v3 no mesmo dia sem considerar a cota compartilhada de buscas.
 
 ## Versão 3 — principal
 
